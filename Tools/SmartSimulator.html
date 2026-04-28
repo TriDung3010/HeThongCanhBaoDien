@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Simulator Pro (Multi-Tenancy)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { background-color: #0b0f1a; color: #f8fafc; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .simulator-box { background: #161e2d; border: 2px solid #2d3748; padding: 30px; border-radius: 20px; text-align: center; width: 350px; box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); }
+        h2 { font-family: 'Orbitron', sans-serif; color: #00d2ff; margin-top: 0; font-size: 1.2rem; }
+        
+        .room-selector { margin-bottom: 25px; text-align: left; }
+        .room-selector label { font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;}
+        select { width: 100%; padding: 12px; background: #0b0f1a; color: #00d2ff; border: 1px solid #00d2ff; border-radius: 8px; font-family: 'Inter', sans-serif; font-weight: bold; outline: none; cursor: pointer; }
+        
+        .power-display { font-family: 'Orbitron', sans-serif; font-size: 3rem; font-weight: bold; margin: 20px 0; color: #f8fafc; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+        .unit { font-size: 1.2rem; color: #94a3b8; }
+        
+        input[type="range"] { width: 100%; margin: 20px 0; cursor: pointer; }
+        .btn-auto { background: #00d2ff; color: #0b0f1a; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; transition: 0.3s; margin-bottom: 10px;}
+        .btn-auto:hover { box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); }
+        .btn-stop { background: #ff4b2b; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; transition: 0.3s; }
+        .btn-stop:hover { box-shadow: 0 0 15px rgba(255, 75, 43, 0.4); }
+        
+        .status { margin-top: 20px; font-size: 0.8rem; color: #2ecc71; display: flex; align-items: center; justify-content: center; gap: 5px;}
+        .dot { height: 8px; width: 8px; background-color: #2ecc71; border-radius: 50%; display: inline-block; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div class="simulator-box">
+        <h2>⚡ ESP32 HARDWARE SIMULATOR</h2>
+        
+        <div class="room-selector">
+            <label>Chọn thiết bị đang phát dữ liệu:</label>
+            <select id="room-select">
+                <option value="cgaXgtYenRVPTbAnIi0mkjXNBZ32">Phòng Trí Dũng (Admin)</option>
+                <option value="tce2W5ywB2NAmOKkyUxZYDdgLBQ2">Phòng 1 (Khách)</option>
+                <option value="dNKmNrObnZbBgIH6O9c2ohZUpV03">Phòng 2 (Khách)</option>
+            </select>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 0;">Công suất tải hiện tại</p>
+        <div class="power-display">
+            <span id="sim-power">0</span> <span class="unit">W</span>
+        </div>
+
+        <input type="range" id="sim-slider" min="0" max="5000" value="0">
+        
+        <button id="btn-random" class="btn-auto">CHẠY TỰ ĐỘNG (RANDOM)</button>
+        <button id="btn-stop" class="btn-stop">TẮT ĐIỆN (VỀ 0W)</button>
+
+        <div class="status">
+            <span class="dot"></span> Đang gửi dữ liệu lên Firebase...
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+        // CẤU HÌNH FIREBASE CỦA BẠN
+        const firebaseConfig = {
+            apiKey: "AIzaSyDYF9eGuOHZv2YY0_lOsN-mE0qNWt_icU0",
+            authDomain: "hethongcanhbaodien.firebaseapp.com",
+            databaseURL: "https://hethongcanhbaodien-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "hethongcanhbaodien",
+            storageBucket: "hethongcanhbaodien.firebasestorage.app",
+            messagingSenderId: "954409445146",
+            appId: "1:954409445146:web:8b604133e1a10cb89c2ea3"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // UI Elements
+        const slider = document.getElementById('sim-slider');
+        const txtPower = document.getElementById('sim-power');
+        const btnRandom = document.getElementById('btn-random');
+        const btnStop = document.getElementById('btn-stop');
+        const roomSelect = document.getElementById('room-select');
+
+        let autoInterval;
+
+        // HÀM BẮN DỮ LIỆU LÊN ĐÚNG PHÒNG ĐÃ CHỌN
+        function sendData(powerValue) {
+            txtPower.innerText = powerValue;
+            slider.value = powerValue;
+            const currentUID = roomSelect.value;
+            set(ref(db, `phongtro/${currentUID}/currentPower`), parseInt(powerValue));
+        }
+
+        // Sự kiện đổi phòng (Reset về 0 để an toàn)
+        roomSelect.addEventListener('change', () => {
+            sendData(0);
+        });
+
+        // Sự kiện kéo tay
+        slider.addEventListener('input', function() {
+            clearInterval(autoInterval);
+            sendData(this.value);
+        });
+
+        // Sự kiện chạy tự động
+        btnRandom.addEventListener('click', () => {
+            clearInterval(autoInterval);
+            autoInterval = setInterval(() => {
+                // Random công suất từ 100W đến 3500W
+                let randomP = Math.floor(Math.random() * (3500 - 100 + 1)) + 100;
+                sendData(randomP);
+            }, 3000); // Đổi số mỗi 3 giây
+        });
+
+        // Sự kiện tắt điện
+        btnStop.addEventListener('click', () => {
+            clearInterval(autoInterval);
+            sendData(0);
+        });
+    </script>
+</body>
+</html>
