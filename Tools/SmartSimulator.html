@@ -1,123 +1,383 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Simulator Pro (Multi-Tenancy)</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESP32 Simulator Pro | SmartGrid System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600;900&display=swap" rel="stylesheet" />
     <style>
-        body { background-color: #0b0f1a; color: #f8fafc; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .simulator-box { background: #161e2d; border: 2px solid #2d3748; padding: 30px; border-radius: 20px; text-align: center; width: 350px; box-shadow: 0 0 20px rgba(0, 210, 255, 0.1); }
-        h2 { font-family: 'Orbitron', sans-serif; color: #00d2ff; margin-top: 0; font-size: 1.2rem; }
-        
-        .room-selector { margin-bottom: 25px; text-align: left; }
-        .room-selector label { font-size: 0.8rem; color: #94a3b8; display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;}
-        select { width: 100%; padding: 12px; background: #0b0f1a; color: #00d2ff; border: 1px solid #00d2ff; border-radius: 8px; font-family: 'Inter', sans-serif; font-weight: bold; outline: none; cursor: pointer; }
-        
-        .power-display { font-family: 'Orbitron', sans-serif; font-size: 3rem; font-weight: bold; margin: 20px 0; color: #f8fafc; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
-        .unit { font-size: 1.2rem; color: #94a3b8; }
-        
-        input[type="range"] { width: 100%; margin: 20px 0; cursor: pointer; }
-        .btn-auto { background: #00d2ff; color: #0b0f1a; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; transition: 0.3s; margin-bottom: 10px;}
-        .btn-auto:hover { box-shadow: 0 0 15px rgba(0, 210, 255, 0.4); }
-        .btn-stop { background: #ff4b2b; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; transition: 0.3s; }
-        .btn-stop:hover { box-shadow: 0 0 15px rgba(255, 75, 43, 0.4); }
-        
-        .status { margin-top: 20px; font-size: 0.8rem; color: #2ecc71; display: flex; align-items: center; justify-content: center; gap: 5px;}
-        .dot { height: 8px; width: 8px; background-color: #2ecc71; border-radius: 50%; display: inline-block; animation: blink 1s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+      :root {
+        --bg: #05080f;
+        --card-bg: rgba(22, 30, 45, 0.7);
+        --primary: #00d2ff;
+        --danger: #ff4b2b;
+        --success: #2ecc71;
+        --text: #f8fafc;
+      }
+
+      body {
+        background: var(--bg);
+        background-image: radial-gradient(circle at 50% 50%, #101827 0%, #05080f 100%);
+        color: var(--text);
+        font-family: "Inter", sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+
+      .simulator-container {
+        background: var(--card-bg);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 40px;
+        border-radius: 40px;
+        width: 420px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* Hiệu ứng đèn Neon chạy viền */
+      .simulator-container::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, transparent, var(--primary), transparent);
+        animation: move-line 3s linear infinite;
+      }
+
+      @keyframes move-line {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
+
+      h2 {
+        font-family: "Orbitron", sans-serif;
+        color: var(--primary);
+        margin: 0 0 10px 0;
+        font-size: 1.1rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      .subtitle {
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #4b5563;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        margin-bottom: 30px;
+      }
+
+      /* Selector Design */
+      .group {
+        margin-bottom: 25px;
+        text-align: left;
+      }
+      label {
+        font-size: 0.65rem;
+        color: #94a3b8;
+        display: block;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      select {
+        width: 100%;
+        padding: 15px;
+        background: #0b111a;
+        color: var(--primary);
+        border: 1px solid rgba(0, 210, 255, 0.3);
+        border-radius: 15px;
+        font-family: "Inter", sans-serif;
+        font-weight: 700;
+        outline: none;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      select:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+      }
+
+      /* Power Monitor Display */
+      .monitor-screen {
+        background: #05080f;
+        border-radius: 25px;
+        padding: 25px;
+        margin-bottom: 25px;
+        border: 1px inset rgba(255, 255, 255, 0.05);
+        text-align: center;
+      }
+
+      .power-value {
+        font-family: "Orbitron", sans-serif;
+        font-size: 3.5rem;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+        line-height: 1;
+      }
+      .power-value span {
+        font-size: 1rem;
+        color: var(--primary);
+        margin-left: 5px;
+      }
+
+      /* Sliders Layout */
+      .slider-group {
+        background: rgba(255, 255, 255, 0.03);
+        padding: 20px;
+        border-radius: 20px;
+        margin-bottom: 25px;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        height: 6px;
+        background: #1f2937;
+        border-radius: 5px;
+        outline: none;
+        -webkit-appearance: none;
+        margin: 15px 0;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        background: var(--primary);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px var(--primary);
+      }
+
+      /* Buttons Grid */
+      .action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 15px;
+        border: none;
+        border-radius: 15px;
+        font-weight: 900;
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .btn-random {
+        background: var(--primary);
+        color: #000;
+      }
+      .btn-random:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0, 210, 255, 0.3);
+      }
+
+      .btn-stop {
+        background: var(--danger);
+        color: #fff;
+      }
+      .btn-stop:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(255, 75, 43, 0.3);
+      }
+
+      /* Status Area */
+      .footer-status {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 0.7rem;
+        color: var(--success);
+        font-weight: 700;
+      }
+
+      .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--success);
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--success);
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.5);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
+    <div class="simulator-container">
+      <h2>Hardware Simulator</h2>
+      <p class="subtitle">SmartGrid ESP32-V2</p>
 
-    <div class="simulator-box">
-        <h2>⚡ ESP32 HARDWARE SIMULATOR</h2>
-        
-        <div class="room-selector">
-            <label>Chọn thiết bị đang phát dữ liệu:</label>
-            <select id="room-select">
-                <option value="cgaXgtYenRVPTbAnIi0mkjXNBZ32">Phòng Trí Dũng (Admin)</option>
-                <option value="tce2W5ywB2NAmOKkyUxZYDdgLBQ2">Phòng 1 (Khách)</option>
-                <option value="dNKmNrObnZbBgIH6O9c2ohZUpV03">Phòng 2 (Khách)</option>
-            </select>
+      <div class="group">
+        <label>Phòng/Thiết bị đang kết nối</label>
+        <select id="room-select">
+          <option value="cgaXgtYenRVPTbAnIi0mkjXNBZ32">Phòng Trí Dũng (Admin)</option>
+          <option value="tce2W5ywB2NAmOKkyUxZYDdgLBQ2">Phòng 101 (Khách 01)</option>
+          <option value="dNKmNrObnZbBgIH6O9c2ohZUpV03">Phòng 102 (Khách 02)</option>
+        </select>
+      </div>
+
+      <div class="monitor-screen">
+        <div class="power-value"><span id="val-master">0</span><span>W</span></div>
+        <label style="margin-top: 10px; text-align: center">Công suất Tổng (Master)</label>
+      </div>
+
+      <div class="slider-group">
+        <label>Điều chỉnh Công suất Tổng (Master)</label>
+        <input type="range" id="slider-master" min="0" max="5000" value="0" />
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px">
+          <div>
+            <label>Nhánh 01 (Sub 1): <span id="val-sub1">0</span>W</label>
+            <input type="range" id="slider-sub1" min="0" max="2500" value="0" />
+          </div>
+          <div>
+            <label>Nhánh 02 (Sub 2): <span id="val-sub2">0</span>W</label>
+            <input type="range" id="slider-sub2" min="0" max="2500" value="0" />
+          </div>
         </div>
+        <p style="font-size: 0.6rem; color: #4b5563; text-align: center; margin-top: 10px">* Mẹo: Để giả lập <b>CÂU TRỘM</b>, hãy kéo Master cao hơn tổng Sub1 + Sub2.</p>
+      </div>
 
-        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 0;">Công suất tải hiện tại</p>
-        <div class="power-display">
-            <span id="sim-power">0</span> <span class="unit">W</span>
-        </div>
+      <div class="action-grid">
+        <button id="btn-random" class="btn btn-random">Auto Random</button>
+        <button id="btn-stop" class="btn btn-stop">Tắt Hệ Thống</button>
+      </div>
 
-        <input type="range" id="sim-slider" min="0" max="5000" value="0">
-        
-        <button id="btn-random" class="btn-auto">CHẠY TỰ ĐỘNG (RANDOM)</button>
-        <button id="btn-stop" class="btn-stop">TẮT ĐIỆN (VỀ 0W)</button>
-
-        <div class="status">
-            <span class="dot"></span> Đang gửi dữ liệu lên Firebase...
-        </div>
+      <div class="footer-status">
+        <div class="pulse-dot"></div>
+        <span>FIREBASE REALTIME CONNECTED</span>
+      </div>
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+      import { getDatabase, ref, set, update } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
 
-        // CẤU HÌNH FIREBASE CỦA BẠN
-        const firebaseConfig = {
-            apiKey: "AIzaSyDYF9eGuOHZv2YY0_lOsN-mE0qNWt_icU0",
-            authDomain: "hethongcanhbaodien.firebaseapp.com",
-            databaseURL: "https://hethongcanhbaodien-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "hethongcanhbaodien",
-            storageBucket: "hethongcanhbaodien.firebasestorage.app",
-            messagingSenderId: "954409445146",
-            appId: "1:954409445146:web:8b604133e1a10cb89c2ea3"
-        };
+      const firebaseConfig = {
+        apiKey: "AIzaSyDYF9eGuOHZv2YY0_lOsN-mE0qNWt_icU0",
+        authDomain: "hethongcanhbaodien.firebaseapp.com",
+        databaseURL: "https://hethongcanhbaodien-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "hethongcanhbaodien",
+        storageBucket: "hethongcanhbaodien.firebasestorage.app",
+        messagingSenderId: "954409445146",
+        appId: "1:954409445146:web:8b604133e1a10cb89c2ea3",
+      };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+      const app = initializeApp(firebaseConfig);
+      const db = getDatabase(app);
 
-        // UI Elements
-        const slider = document.getElementById('sim-slider');
-        const txtPower = document.getElementById('sim-power');
-        const btnRandom = document.getElementById('btn-random');
-        const btnStop = document.getElementById('btn-stop');
-        const roomSelect = document.getElementById('room-select');
+      // UI Elements
+      const sMaster = document.getElementById("slider-master");
+      const sSub1 = document.getElementById("slider-sub1");
+      const sSub2 = document.getElementById("slider-sub2");
 
-        let autoInterval;
+      const vMaster = document.getElementById("val-master");
+      const vSub1 = document.getElementById("val-sub1");
+      const vSub2 = document.getElementById("val-sub2");
 
-        // HÀM BẮN DỮ LIỆU LÊN ĐÚNG PHÒNG ĐÃ CHỌN
-        function sendData(powerValue) {
-            txtPower.innerText = powerValue;
-            slider.value = powerValue;
-            const currentUID = roomSelect.value;
-            set(ref(db, `phongtro/${currentUID}/currentPower`), parseInt(powerValue));
-        }
+      const btnRandom = document.getElementById("btn-random");
+      const btnStop = document.getElementById("btn-stop");
+      const roomSelect = document.getElementById("room-select");
 
-        // Sự kiện đổi phòng (Reset về 0 để an toàn)
-        roomSelect.addEventListener('change', () => {
-            sendData(0);
+      let autoInterval;
+
+      // Hàm cập nhật đồng bộ lên Firebase
+      function syncData() {
+        const currentUID = roomSelect.value;
+        const power = parseInt(sMaster.value);
+        const sub1 = parseInt(sSub1.value);
+        const sub2 = parseInt(sSub2.value);
+
+        // Hiển thị UI
+        vMaster.innerText = power;
+        vSub1.innerText = sub1;
+        vSub2.innerText = sub2;
+
+        // Bắn dữ liệu lên Firebase
+        update(ref(db, `phongtro/${currentUID}`), {
+          currentPower: power,
+          sub1: sub1,
+          sub2: sub2,
+          lastUpdated: Date.now(),
         });
+      }
 
-        // Sự kiện kéo tay
-        slider.addEventListener('input', function() {
-            clearInterval(autoInterval);
-            sendData(this.value);
+      // Sự kiện các thanh trượt
+      [sMaster, sSub1, sSub2].forEach((slider) => {
+        slider.addEventListener("input", () => {
+          clearInterval(autoInterval);
+          syncData();
         });
+      });
 
-        // Sự kiện chạy tự động
-        btnRandom.addEventListener('click', () => {
-            clearInterval(autoInterval);
-            autoInterval = setInterval(() => {
-                // Random công suất từ 100W đến 3500W
-                let randomP = Math.floor(Math.random() * (3500 - 100 + 1)) + 100;
-                sendData(randomP);
-            }, 3000); // Đổi số mỗi 3 giây
-        });
+      // Đổi phòng
+      roomSelect.addEventListener("change", () => {
+        sMaster.value = 0;
+        sSub1.value = 0;
+        sSub2.value = 0;
+        syncData();
+      });
 
-        // Sự kiện tắt điện
-        btnStop.addEventListener('click', () => {
-            clearInterval(autoInterval);
-            sendData(0);
-        });
+      // Chạy ngẫu nhiên (Giả lập thực tế)
+      btnRandom.addEventListener("click", () => {
+        clearInterval(autoInterval);
+        autoInterval = setInterval(() => {
+          const randomM = Math.floor(Math.random() * 4000) + 100;
+          // Giả lập sub-meters chiếm khoảng 80-95% tổng công suất (phần còn lại là hao hụt hoặc trộm)
+          const randomS1 = Math.floor(randomM * 0.45);
+          const randomS2 = Math.floor(randomM * 0.4);
+
+          sMaster.value = randomM;
+          sSub1.value = randomS1;
+          sSub2.value = randomS2;
+          syncData();
+        }, 2000);
+      });
+
+      // Stop
+      btnStop.addEventListener("click", () => {
+        clearInterval(autoInterval);
+        sMaster.value = 0;
+        sSub1.value = 0;
+        sSub2.value = 0;
+        syncData();
+      });
     </script>
-</body>
+  </body>
 </html>

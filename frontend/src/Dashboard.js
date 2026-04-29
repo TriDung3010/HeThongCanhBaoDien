@@ -18,22 +18,21 @@ export default function Dashboard() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [roomsList, setRoomsList] = useState([]);
 
-  // --- THÔNG SỐ VẬN HÀNH (Khớp với app.js trên Github) ---
+  // --- THÔNG SỐ VẬN HÀNH ---
   const [billing, setBilling] = useState({ kwh: 0, cost: 0, budget: 50000 });
   const pricePerKwh = 2500;
   const [config, setConfig] = useState({ threshold: 2000, isSecurityOn: false });
 
   const timerRef = useRef(null);
+  const lastAlertTime = useRef(0); // Tôi dùng biến này để chặn việc ghi Log quá nhanh
 
-  // Danh sách ánh xạ tên phòng cố định nếu Database chưa có trường roomName
-  // Tôi lấy thông tin này từ Simulator và trang chủ của bạn
+  // Ánh xạ tên phòng từ Database
   const roomNameMap = {
-    cgaXgtYenRVPTbAnIi0mkjXNBZ32: "Phòng Trí Dũng (Admin)",
-    tce2W5ywB2NAmOKkyUxZYDdgLBQ2: "Phòng 101 (Khách)",
-    dNKmNrObnZbBgIH6O9c2ohZUpV03: "Phòng 102 (Khách)",
+    cgaXgtYenRVPTbAnIi0mkjXNBZ32: "Phòng Admin (Quản lý)",
+    tce2W5ywB2NAmOKkyUxZYDdgLBQ2: "Phòng 101 (Khách thuê)",
+    dNKmNrObnZbBgIH6O9c2ohZUpV03: "Phòng 102 (Khách thuê)",
   };
 
-  // 1. Phân quyền và Tải danh sách phòng từ Database
   useEffect(() => {
     const user = auth.currentUser;
     if (user) {
@@ -41,17 +40,15 @@ export default function Dashboard() {
       setIsAdmin(isAd);
 
       if (isAd) {
-        const roomsRef = ref(db, "phongtro");
-        onValue(roomsRef, (snapshot) => {
+        onValue(ref(db, "phongtro"), (snapshot) => {
           const roomsData = snapshot.val();
           if (roomsData) {
             const list = Object.keys(roomsData).map((uid) => ({
               id: uid,
-              // Ưu tiên lấy tên từ database, nếu không có thì lấy từ bản đồ tên phòng, cuối cùng mới dùng UID
-              name: roomsData[uid].roomName || roomNameMap[uid] || `Phòng thuê ${uid.substring(0, 4)}`,
+              name: roomsData[uid].roomName || roomNameMap[uid] || `Phòng ${uid.substring(0, 5)}`,
             }));
             setRoomsList(list);
-            setRoomPath(`phongtro/${list[0].id}`);
+            if (!roomPath) setRoomPath(`phongtro/${list[0].id}`);
           }
         });
       } else {
@@ -60,7 +57,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  // 2. Lắng nghe dữ liệu Live & Logic phát hiện câu trộm
   useEffect(() => {
     if (!roomPath) return;
 
@@ -71,25 +67,28 @@ export default function Dashboard() {
         setData({ master: power, sub1: val.sub1 || 0, sub2: val.sub2 || 0 });
         setConfig({ threshold: val.threshold || 2000, isSecurityOn: val.isSecurityOn || false });
 
-        // Logic phát hiện câu trộm: Master > Tổng các thiết bị nhánh
+        // LOGIC CHỐNG LAG: Chỉ ghi Log vào Firebase nếu cách nhau ít nhất 10 giây
         const leakage = power - ((val.sub1 || 0) + (val.sub2 || 0));
         if (val.isSecurityOn && leakage > 15) {
-          handleAutoAlert(`🚨 CẢNH BÁO: Phát hiện dòng rò/Câu trộm điện (${leakage.toFixed(1)}W)!`);
+          const now = Date.now();
+          if (now - lastAlertTime.current > 10000) {
+            // 10000ms = 10 giây
+            lastAlertTime.current = now;
+            handleAutoAlert(`🚨 Phát hiện thất thoát: ${leakage.toFixed(1)}W`);
+          }
         }
       }
     });
 
-    const unsubscribeHistory = onValue(ref(db, `${roomPath}/billingHistory`), (snapshot) => {
+    onValue(ref(db, `${roomPath}/billingHistory`), (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const list = Object.entries(val).map(([id, item]) => ({ id, ...item }));
         setBillHistory(list.sort((a, b) => b.timestamp - a.timestamp));
-      } else {
-        setBillHistory([]);
       }
     });
 
-    const unsubscribeLogs = onValue(ref(db, `${roomPath}/incidentLogs`), (snapshot) => {
+    onValue(ref(db, `${roomPath}/incidentLogs`), (snapshot) => {
       const val = snapshot.val();
       if (val) {
         const list = Object.entries(val)
@@ -100,7 +99,6 @@ export default function Dashboard() {
       }
     });
 
-    // 3. Chu kỳ cập nhật chỉ số điện năng
     timerRef.current = setInterval(() => {
       setData((curr) => {
         if (curr.master > 0) {
@@ -126,9 +124,6 @@ export default function Dashboard() {
     }, 1000);
 
     return () => {
-      unsubscribeLive();
-      unsubscribeHistory();
-      unsubscribeLogs();
       clearInterval(timerRef.current);
     };
   }, [roomPath]);
@@ -142,17 +137,15 @@ export default function Dashboard() {
   };
 
   const handleSaveBill = () => {
-    if (billing.kwh <= 0.001) return alert("Hệ thống chưa đủ dữ liệu tiêu thụ.");
-    const now = new Date();
-    const monthId = `month_${now.getMonth() + 1}_${now.getFullYear()}`;
-
+    if (billing.kwh <= 0.001) return alert("Chưa có dữ liệu.");
+    const monthId = `month_${new Date().getMonth() + 1}_${new Date().getFullYear()}`;
     set(ref(db, `${roomPath}/billingHistory/${monthId}`), {
-      month: `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`,
+      month: `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`,
       kwh: billing.kwh.toFixed(3),
       amount: Math.round(billing.cost).toLocaleString(),
       timestamp: Date.now(),
     }).then(() => {
-      alert("Đã chốt hóa đơn thành công.");
+      alert("Đã chốt hóa đơn.");
       setBilling((prev) => ({ ...prev, kwh: 0, cost: 0 }));
     });
   };
@@ -164,13 +157,12 @@ export default function Dashboard() {
       <Sidebar isAdmin={isAdmin} setView={setView} currentView={view} />
 
       <main className="flex-1 h-full overflow-y-auto p-10 custom-scrollbar">
-        {/* Header hiện đại */}
         <header className="flex justify-between items-center mb-10 bg-white/70 backdrop-blur-md p-8 rounded-[3rem] border border-white shadow-xl shadow-slate-200/40">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">
               AI <span className="text-blue-600">GRID PRO</span>
             </h1>
-            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Phiên bản Đồ án Tốt nghiệp</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest italic">{isAdmin ? "Hệ thống Quản trị tòa nhà" : "Cổng thông tin khách thuê"}</p>
           </div>
 
           <div className="flex gap-4">
@@ -178,7 +170,7 @@ export default function Dashboard() {
               <select
                 value={roomPath.split("/")[1]}
                 onChange={(e) => setRoomPath(`phongtro/${e.target.value}`)}
-                className="bg-slate-100 border-none rounded-2xl px-6 py-3 font-bold text-xs text-blue-600 outline-none shadow-sm cursor-pointer"
+                className="bg-slate-100 border-none rounded-2xl px-6 py-3 font-bold text-xs text-blue-600 outline-none shadow-sm"
               >
                 {roomsList.map((room) => (
                   <option key={room.id} value={room.id}>
@@ -188,7 +180,7 @@ export default function Dashboard() {
               </select>
             )}
             {view === "overview" && (
-              <button onClick={handleSaveBill} className="bg-slate-950 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase shadow-2xl hover:bg-black transition-all">
+              <button onClick={handleSaveBill} className="bg-slate-950 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase shadow-2xl hover:scale-105 transition-transform">
                 Chốt hóa đơn
               </button>
             )}
@@ -197,25 +189,24 @@ export default function Dashboard() {
 
         {view === "overview" && (
           <div className="space-y-10 animate-in fade-in duration-700">
-            {/* Cảnh báo an ninh */}
             {leakagePower > 15 && config.isSecurityOn && (
               <div className="bg-red-600 text-white p-7 rounded-[3rem] flex items-center gap-6 shadow-2xl animate-pulse">
                 <ShieldAlert size={36} />
                 <div>
                   <h4 className="font-black uppercase text-sm">Phát hiện hành vi câu trộm điện</h4>
-                  <p className="text-xs font-medium opacity-90 tracking-wide">Thất thoát {leakagePower.toFixed(1)}W. Đang có thiết bị lạ kết nối ngoài các nhánh giám sát.</p>
+                  <p className="text-xs font-medium opacity-90 tracking-wide">Sai lệch công suất: {leakagePower.toFixed(1)}W. Đang có thiết bị kết nối ngoài các tải nhánh giám sát.</p>
                 </div>
               </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <StatCard label="Công suất tổng" value={data.master} unit="W" type="zap" />
-              <StatCard label="Tiền điện tạm" value={Math.round(billing.cost).toLocaleString()} unit="đ" />
+              <StatCard label="Hóa đơn tạm" value={Math.round(billing.cost).toLocaleString()} unit="đ" />
               <StatCard label="Điện năng tiêu thụ" value={billing.kwh.toFixed(3)} unit="kWh" iconColor="text-emerald-500" />
               <div className="bg-blue-600 p-8 rounded-[2.5rem] shadow-2xl shadow-blue-200 text-white relative">
-                <p className="text-[10px] font-black uppercase mb-4 opacity-80">Ngân sách hiện tại</p>
+                <p className="text-[10px] font-black uppercase mb-4 opacity-80">Ngân sách còn lại</p>
                 <h2 className="text-3xl font-black">
-                  {Math.round(billing.budget).toLocaleString()} <small className="text-xs">đ</small>
+                  {Math.round(billing.budget).toLocaleString()} <small className="text-xs font-bold">VNĐ</small>
                 </h2>
                 <div className="mt-4 w-full bg-blue-700 h-1 rounded-full overflow-hidden">
                   <div className="bg-white h-full transition-all duration-1000" style={{ width: `${(billing.budget / 50000) * 100}%` }}></div>
@@ -227,17 +218,11 @@ export default function Dashboard() {
               <div className="xl:col-span-2 bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm relative">
                 <div className="flex justify-between items-center mb-10 border-b border-slate-50 pb-6">
                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <Activity size={16} className="text-blue-600" /> Phân tích phụ tải thời gian thực
+                    <Activity size={16} className="text-blue-600" /> Biểu đồ phụ tải (Live)
                   </h3>
                   <div className="flex gap-5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">Nhánh 01: {data.sub1}W</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">Nhánh 02: {data.sub2}W</span>
-                    </div>
+                    <span className="text-[10px] font-bold text-blue-500 uppercase">Thiết bị 01: {data.sub1}W</span>
+                    <span className="text-[10px] font-bold text-indigo-500 uppercase">Thiết bị 02: {data.sub2}W</span>
                   </div>
                 </div>
                 <LineChart data={chartData} />
@@ -246,10 +231,10 @@ export default function Dashboard() {
               <div className="space-y-8">
                 <SystemStatus isAlert={leakagePower > 15 || data.master > config.threshold} />
                 <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase mb-8 tracking-widest">Trung tâm điều khiển</h4>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase mb-8 tracking-widest">Trung tâm an ninh</h4>
                   <div className="space-y-6">
                     <div className="flex justify-between items-center bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100">
-                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Bảo vệ chống trộm</span>
+                      <span className="text-[10px] font-black text-slate-500 uppercase">Chế độ bảo vệ</span>
                       <button
                         onClick={() => update(ref(db, roomPath), { isSecurityOn: !config.isSecurityOn })}
                         className={`w-14 h-7 rounded-full transition-all duration-300 ${config.isSecurityOn ? "bg-emerald-500 shadow-lg shadow-emerald-100" : "bg-slate-300"} relative`}
@@ -257,8 +242,8 @@ export default function Dashboard() {
                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all ${config.isSecurityOn ? "right-1" : "left-1"}`} />
                       </button>
                     </div>
-                    <button className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-[10px] uppercase shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-                      <CreditCard size={18} /> Nạp 50,000đ ngân sách
+                    <button className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-[10px] uppercase shadow-xl hover:bg-blue-700 transition-colors">
+                      <CreditCard size={18} className="inline mr-2" /> Nạp thêm ngân sách
                     </button>
                   </div>
                 </div>
@@ -269,7 +254,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tab Lịch sử phòng dành cho Admin */}
         {view === "rooms" && isAdmin && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in slide-in-from-bottom-8 duration-700">
             {roomsList.map((room) => (
@@ -285,12 +269,12 @@ export default function Dashboard() {
                   <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                     <Home size={24} />
                   </div>
-                  <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-100">Online</span>
+                  <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-100">ACTIVE</span>
                 </div>
                 <h4 className="font-black text-slate-900 uppercase text-sm mb-1">{room.name}</h4>
-                <p className="text-[10px] text-slate-400 font-bold tracking-widest mb-6 uppercase">Mã: {room.id.substring(0, 10)}...</p>
+                <p className="text-[10px] text-slate-400 font-bold tracking-widest mb-6">UID: {room.id.substring(0, 10)}...</p>
                 <div className="pt-6 border-t border-slate-50 flex justify-between items-center text-[10px] font-black uppercase text-blue-600">
-                  <span>Truy cập phòng này →</span>
+                  <span>Truy cập giám sát phòng này →</span>
                 </div>
               </div>
             ))}
@@ -302,7 +286,7 @@ export default function Dashboard() {
             <table className="w-full text-left">
               <thead className="bg-slate-50/50">
                 <tr>
-                  <th className="p-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Kỳ thanh toán</th>
+                  <th className="p-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Kỳ hóa đơn</th>
                   <th className="p-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Tiêu thụ (kWh)</th>
                   <th className="p-8 text-[10px] font-black text-slate-400 uppercase tracking-widest text-blue-600">Thành tiền</th>
                   <th className="p-8 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Trạng thái</th>
@@ -313,7 +297,7 @@ export default function Dashboard() {
                   <tr key={bill.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-8 font-black text-slate-700 uppercase text-xs">{bill.month}</td>
                     <td className="p-8 font-bold text-slate-500">{bill.kwh}</td>
-                    <td className="p-8 font-black text-blue-600 text-sm italic">{bill.amount} đ</td>
+                    <td className="p-8 font-black text-blue-600 text-sm font-italic">{bill.amount} đ</td>
                     <td className="p-8 text-center">
                       <span className="bg-emerald-50 text-emerald-600 px-5 py-2 rounded-full text-[9px] font-black uppercase border border-emerald-100">Đã thanh toán</span>
                     </td>
