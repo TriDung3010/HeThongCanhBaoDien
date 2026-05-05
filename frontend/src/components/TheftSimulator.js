@@ -9,7 +9,7 @@ export default function TheftSimulator({
   setIsStealing,
   stolenAmount,
   setStolenAmount,
-  totalDevicePower, // Nhận trực tiếp từ Dashboard để đảm bảo chính xác 100%
+  totalDevicePower,
 }) {
   const setStolenPower = (power) => {
     if (isStealing)
@@ -18,12 +18,16 @@ export default function TheftSimulator({
   };
 
   const stopTheft = () => {
+    // Bước 1: Tắt trạng thái ăn trộm trên giao diện
     setIsStealing(false);
-    setStolenAmount(0);
-    // Trả nguồn tổng về đúng bằng công suất hợp pháp
-    update(ref(db, `phongtro/${roomUID}`), {
-      currentPower: totalDevicePower,
-    });
+
+    // Bước 2: Dùng setTimeout ép Firebase đợi 300ms để React kịp báo cho Dashboard biết là "Đã tắt câu trộm"
+    // Nếu không đợi, Firebase trừ điện quá nhanh, Dashboard sẽ tưởng nhầm là bị sụt điện và tự động bơm điện bù vào.
+    setTimeout(() => {
+      update(ref(db, `phongtro/${roomUID}`), {
+        currentPower: totalDevicePower,
+      });
+    }, 300);
   };
 
   const toggleTheft = () => {
@@ -31,13 +35,11 @@ export default function TheftSimulator({
       return alert("Đồng chí chưa chọn thiết bị câu trộm!");
 
     if (!isStealing) {
-      // BẮT ĐẦU TRỘM
       setIsStealing(true);
       update(ref(db, `phongtro/${roomUID}`), {
         currentPower: totalDevicePower + stolenAmount,
       });
     } else {
-      // DỪNG TRỘM
       stopTheft();
     }
   };
@@ -97,9 +99,12 @@ export default function TheftSimulator({
             </button>
             {isStealing && (
               <button
-                onClick={stopTheft}
+                onClick={() => {
+                  stopTheft();
+                  setStolenAmount(0); // Nút này sẽ dừng và reset bộ đếm về 0
+                }}
                 className="bg-red-600 hover:bg-red-500 text-white p-5 rounded-2xl transition-all shadow-[0_0_20px_rgba(220,38,38,0.5)] flex items-center justify-center"
-                title="Tắt toàn bộ giả lập"
+                title="Tắt toàn bộ giả lập và đặt lại"
               >
                 <PowerOff size={24} />
               </button>
