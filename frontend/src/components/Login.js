@@ -5,19 +5,17 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { ref, set, onValue, remove } from "firebase/database";
-import { Zap, Mail, Lock, UserPlus, LogIn, Home } from "lucide-react";
+import { Zap, User, Lock, UserPlus, LogIn, Home } from "lucide-react"; // SỬ DỤNG ICON USER THAY VÌ MAIL
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState(""); // ĐỔI STATE EMAIL THÀNH USERNAME
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  // STATE: Danh sách phòng trống và phòng khách đang chọn
   const [availableRooms, setAvailableRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState("");
 
-  // Lấy danh sách phòng trống từ Database
   useEffect(() => {
     const roomsRef = ref(db, "availableRooms");
     const unsubscribe = onValue(roomsRef, (snapshot) => {
@@ -40,10 +38,16 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    // THỦ THUẬT: Nếu admin nhập email thì giữ nguyên, nếu khách nhập tên thường thì tự nối đuôi @smartgrid.com
+    const emailToUse = username.includes("@")
+      ? username
+      : `${username}@smartgrid.com`;
+
     try {
       if (isLogin) {
         // ĐĂNG NHẬP
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, emailToUse, password);
       } else {
         // ĐĂNG KÝ
         if (availableRooms.length === 0 || !selectedRoom) {
@@ -52,15 +56,13 @@ export default function Login() {
 
         const userCredential = await createUserWithEmailAndPassword(
           auth,
-          email,
+          emailToUse,
           password,
         );
         const user = userCredential.user;
 
-        // Tìm thông tin phòng khách vừa chọn
         const roomInfo = availableRooms.find((r) => r.id === selectedRoom);
 
-        // Tạo dữ liệu phòng mới: Trống trơn, 0 đồng, cúp điện
         await set(ref(db, `phongtro/${user.uid}`), {
           roomName: roomInfo.name,
           currentPower: 0,
@@ -68,18 +70,17 @@ export default function Login() {
           isPowerOn: false,
           isSecurityOn: false,
           threshold: 2000,
-          budget: 0, // Bắt đầu với 0 đồng
-          deviceList: [], // Chưa có thiết bị nào
+          budget: 0,
+          deviceList: [],
         });
 
-        // Đã có chủ -> Xóa phòng khỏi danh sách phòng trống
         await remove(ref(db, `availableRooms/${selectedRoom}`));
       }
     } catch (err) {
       if (err.message.includes("auth/invalid-credential")) {
-        setError("Sai tài khoản hoặc mật khẩu!");
+        setError("Sai tên đăng nhập hoặc mật khẩu!");
       } else if (err.message.includes("auth/email-already-in-use")) {
-        setError("Email này đã được đăng ký!");
+        setError("Tên đăng nhập này đã có người sử dụng!");
       } else {
         setError("Lỗi hệ thống! Vui lòng thử lại.");
       }
@@ -104,12 +105,12 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="relative">
-            <Mail className="absolute left-4 top-4.5 text-slate-400 w-5 h-5" />
+            <User className="absolute left-4 top-4.5 text-slate-400 w-5 h-5" />
             <input
-              type="email"
-              placeholder="Email"
+              type="text"
+              placeholder="Tên đăng nhập (VD: phong101)"
               className="w-full p-4 pl-12 rounded-2xl bg-slate-50 border border-slate-100 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all font-bold text-slate-700"
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>
@@ -126,7 +127,6 @@ export default function Login() {
             />
           </div>
 
-          {/* MỤC CHỌN PHÒNG CHỈ HIỆN KHI ĐĂNG KÝ */}
           {!isLogin && (
             <div className="relative">
               <Home className="absolute left-4 top-4.5 text-slate-400 w-5 h-5" />

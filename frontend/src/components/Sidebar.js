@@ -1,24 +1,30 @@
 import React from "react";
 import {
   LayoutDashboard,
-  Users,
+  Plug,
+  Home,
   History,
   Settings,
   LogOut,
   Zap,
   Skull,
-  UserCog, // Icon mới cho Quản lý tài khoản
+  UserCog,
 } from "lucide-react";
 import { auth } from "../firebase";
 
 export default function Sidebar({ isAdmin, setView, currentView }) {
   const menuItems = [
     { id: "overview", name: "Giám sát chi tiết", icon: LayoutDashboard },
-    { id: "rooms", name: "Quản lý phòng", icon: Users },
-    { id: "accounts", name: "Quản lý tài khoản", icon: UserCog }, // THÊM TAB NÀY
+    { id: "devices", name: "Thiết bị phòng", icon: Plug },
+    { id: "rooms", name: "Quản lý phòng", icon: Home, adminOnly: true },
     { id: "history", name: "Lịch sử hóa đơn", icon: History },
-    { id: "settings", name: "Cấu hình hệ thống", icon: Settings },
-    { id: "theft", name: "Giả lập tấn công", icon: Skull, isDanger: true },
+    {
+      id: "theft",
+      name: "Giả lập tấn công",
+      icon: Skull,
+      isDanger: true,
+      adminOnly: true,
+    },
   ];
 
   return (
@@ -39,6 +45,7 @@ export default function Sidebar({ isAdmin, setView, currentView }) {
 
       <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
         {menuItems.map((item) => {
+          // Logic chặn hiển thị: Nếu tab có cờ adminOnly mà không phải Admin thì ẩn đi
           if (item.adminOnly && !isAdmin) return null;
           const Icon = item.icon;
           const isActive = currentView === item.id;
@@ -68,7 +75,27 @@ export default function Sidebar({ isAdmin, setView, currentView }) {
         })}
       </nav>
 
-      <div className="pt-8 mt-6 border-t border-slate-800/60">
+      {/* KHU VỰC DƯỚI CÙNG: QUẢN LÝ TÀI KHOẢN VÀ THOÁT */}
+      <div className="pt-8 mt-6 border-t border-slate-800/60 space-y-2">
+        <button
+          onClick={() => setView("accounts")}
+          className={`w-full flex items-center gap-4 p-4 rounded-[1.25rem] text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
+            currentView === "accounts"
+              ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
+              : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+          }`}
+        >
+          <div
+            className={`p-2 rounded-xl ${currentView === "accounts" ? "bg-white/20" : "bg-slate-800"}`}
+          >
+            <UserCog
+              size={18}
+              strokeWidth={currentView === "accounts" ? 3 : 2}
+            />
+          </div>
+          <span>Quản lý tài khoản</span>
+        </button>
+
         <button
           onClick={() => auth.signOut()}
           className="w-full flex items-center gap-4 p-4 rounded-[1.25rem] text-[11px] font-black text-red-500 hover:bg-red-500/10 transition-all duration-300 uppercase tracking-widest"
