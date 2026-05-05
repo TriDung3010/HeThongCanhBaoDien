@@ -1,13 +1,24 @@
 import React from "react";
-import { LayoutDashboard, Users, History, Settings, LogOut, Zap } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  History,
+  Settings,
+  LogOut,
+  Zap,
+  Skull,
+  UserCog, // Icon mới cho Quản lý tài khoản
+} from "lucide-react";
 import { auth } from "../firebase";
 
 export default function Sidebar({ isAdmin, setView, currentView }) {
   const menuItems = [
     { id: "overview", name: "Giám sát chi tiết", icon: LayoutDashboard },
-    { id: "rooms", name: "Quản lý phòng", icon: Users, adminOnly: true },
+    { id: "rooms", name: "Quản lý phòng", icon: Users },
+    { id: "accounts", name: "Quản lý tài khoản", icon: UserCog }, // THÊM TAB NÀY
     { id: "history", name: "Lịch sử hóa đơn", icon: History },
     { id: "settings", name: "Cấu hình hệ thống", icon: Settings },
+    { id: "theft", name: "Giả lập tấn công", icon: Skull, isDanger: true },
   ];
 
   return (
@@ -20,7 +31,9 @@ export default function Sidebar({ isAdmin, setView, currentView }) {
           <h2 className="text-xl font-black tracking-tighter uppercase italic leading-none">
             SmartGrid <span className="text-blue-500">Pro</span>
           </h2>
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">An ninh điện 24/7</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">
+            An ninh điện 24/7
+          </p>
         </div>
       </div>
 
@@ -35,10 +48,18 @@ export default function Sidebar({ isAdmin, setView, currentView }) {
               key={item.id}
               onClick={() => setView(item.id)}
               className={`w-full flex items-center gap-4 p-4 rounded-[1.25rem] text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
-                isActive ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20" : "text-slate-500 hover:bg-slate-800/50 hover:text-slate-200"
+                isActive && !item.isDanger
+                  ? "bg-blue-600 text-white shadow-xl shadow-blue-600/20"
+                  : isActive && item.isDanger
+                    ? "bg-red-600 text-white shadow-xl shadow-red-600/20"
+                    : item.isDanger
+                      ? "text-red-400 hover:bg-red-950/50 hover:text-red-300"
+                      : "text-slate-500 hover:bg-slate-800/50 hover:text-slate-200"
               }`}
             >
-              <div className={`p-2 rounded-xl ${isActive ? "bg-white/20" : "bg-slate-800"}`}>
+              <div
+                className={`p-2 rounded-xl ${isActive ? "bg-white/20" : "bg-slate-800"}`}
+              >
                 <Icon size={18} strokeWidth={isActive ? 3 : 2} />
               </div>
               <span>{item.name}</span>
